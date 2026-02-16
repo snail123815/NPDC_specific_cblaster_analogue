@@ -1,24 +1,103 @@
 import re
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from pathlib import Path
 
-from tqdm import tqdm
+from functions import cal_maxgap, get_target_info
 
-from fake_cblaster_parse_NPDC_blastp_res_funcs import (
-    cal_maxgap,
-    get_target_info,
+HELP_DESCRIPTION = """\
+Process NPDC-specific cblaster results.
+
+To prepare:
+1. Run BLASTP for each target against the NPDC database. It allows
+    5 targets per run maximum. Please use simple naming for targets as
+    fasta headers (e.g., >TacA, >TacB, etc.)
+    You cannot change NPDC DIAMOND-BLASTP parameters:
+        e-value - 1e-10
+        identity - 40%
+        query coverage - 80%
+2. Download the 'BLAST tabular result (.txt)' for every target. 
+    You need to click download at least twice, first time clicking, the 
+    server will prepare the data. Data can be only downloaded from a 
+    second attempt. Expect many 'cooldown' timers between downloads.
+3. Extract downloaded zip files, organize folders like the following,
+    make sure the dir name per protein result is:
+    NPDC + "_" + number + "_" + ProteinName(exactly from fasta header)
+
+    SCRIPT_FOLDER/
+    ├── NPDC_01_ProA/
+    │   ├── blast_tabular_result.txt
+    │   └── metadata_ProA.txt
+    ├── NPDC_02_ProB/
+    │   ├── blast_tabular_result.txt
+    │   └── metadata_ProB.txt
+    ├── NPDC_03_ProC/
+    │   ├── blast_tabular_result.txt
+    │   └── metadata_ProC.txt
+    ├── Others.../
+    ├── npdc_specific_cblaster_main.py
+    └── functions.py
+
+    The above naming convension matches the default --target_folder_pattern
+    parsing rule: "^NPDC_([0-9]+)_(.+)$"
+
+    Number should not be important, but it makes life easier to follow your
+    input BGC ;-)
+
+4. Run this script with appropriate arguments, e.g.:
+
+    % python npdc_specific_cblaster_main.py \\
+        --required_proteins TacA TacB TacC # the ProteinName from fasta.
+        
+    Output will be shown as text in your terminal.
+
+5. Optionally download the genomes manually and do a real cblaster run to 
+    generate a plot.
+"""
+
+parser = ArgumentParser(
+    description=HELP_DESCRIPTION,
+    formatter_class=RawDescriptionHelpFormatter,
+)
+parser.add_argument(
+    "--target_folder_pattern",
+    type=str,
+    default=r"^NPDC_([0-9]+)_(.+)$",
+    help=(
+        "Regex pattern to identify target folders and extract target "
+        "number and name. Default: '^NPDC_([0-9]+)_(.+)$' "
+        "(matches folders like 'NPDC_1_TacA' and extracts target number '1' "
+        "and target name 'TacA')."
+    ),
+)
+parser.add_argument(
+    "--required_proteins",
+    nargs="*",
+    default=[],
+    help=(
+        "List of required target protein names (e.g., TacA TacB TacC)."
+        " Must match the target_name in the folder names (e.g., NPDC_1_TacA)."
+    ),
+)
+parser.add_argument(
+    "--gap",
+    type=int,
+    default=20000,
+    help=(
+        "Maximum allowed gap (in bp) between hits of different targets "
+        "on the same contig. Default: 20000)"
+    ),
 )
 
-target_folder_regex = re.compile(r"^NPDC_([0-9]+)_(.+)$")
-required_proteins = []
+args = parser.parse_args()
+target_folder_regex = re.compile(args.target_folder_pattern)
+required_proteins = args.required_proteins
 filters = {
-    "gap": 20000,
+    "gap": args.gap,  # Maximum allowed gap (in bp) between hits of different targets on the same contig
     "min_unique_NI": 3,  # not implemented
     "min_identity_NI": 40.0,  # not implemented, must >= 40%
     "max_evalue_NI": 1e-10,  # not implemented, must >= 1e-10
     "min_qcov_NI": 80.0,  # not implemented, must >= 80%
 }
-# DIAMOND-BLASTP with e-value, %identity,
-# and query coverage cutoffs of 1e-10, 40%, and 80%, respectively.
 
 op_targets = []
 req_targets = []
@@ -134,7 +213,7 @@ print(
 )
 
 
-for k, v in tqdm(genomes.items()):
+for k, v in genomes.items():
     # Check if all required targets are present
     if len(v) < len(req_targets):
         continue
