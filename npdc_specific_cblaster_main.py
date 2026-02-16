@@ -1,12 +1,7 @@
 import re
 from pathlib import Path
 
-from tqdm import tqdm
-
-from fake_cblaster_parse_NPDC_blastp_res_funcs import (
-    cal_maxgap,
-    get_target_info,
-)
+from functions import cal_maxgap, get_target_info
 
 target_folder_regex = re.compile(r"^NPDC_([0-9]+)_(.+)$")
 required_proteins = []
@@ -134,7 +129,7 @@ print(
 )
 
 
-for k, v in tqdm(genomes.items()):
+for k, v in genomes.items():
     # Check if all required targets are present
     if len(v) < len(req_targets):
         continue
